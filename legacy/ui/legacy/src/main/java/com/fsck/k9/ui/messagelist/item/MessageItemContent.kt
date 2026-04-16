@@ -14,6 +14,8 @@ import kotlinx.collections.immutable.toPersistentList
 import net.thunderbird.feature.account.avatar.AvatarMonogramCreator
 import net.thunderbird.feature.mail.message.list.preferences.MessageListPreferences
 import net.thunderbird.feature.mail.message.list.ui.component.config.MessageItemAccountIndicator
+import net.thunderbird.feature.mail.message.list.smartinbox.MessageCategory
+import net.thunderbird.feature.mail.message.list.smartinbox.MessageCategoryClassifier
 import net.thunderbird.feature.mail.message.list.ui.component.organism.ReadMessageItem
 import net.thunderbird.feature.mail.message.list.ui.component.organism.UnreadMessageItem
 import net.thunderbird.feature.mail.message.list.ui.state.Account
@@ -129,7 +131,13 @@ private fun rememberMessageItemUi(
         ),
         subject = item.subject ?: "n/a",
         excerpt = item.previewText,
-        formattedReceivedAt = item.displayMessageDateTime,
+        // Smart Inbox prototype-only: prefix the received-at with a one-letter category
+        // glyph so the user can scan for misclassifications in "All" view without tapping
+        // through chips. The original Smart Inbox scope excluded per-row category indicators
+        // explicitly; this affordance is for validation during prototype feedback and must
+        // be removed (or redesigned into a proper indicator on the Compose ML 0.1 list)
+        // before any upstream pitch.
+        formattedReceivedAt = item.smartInboxGlyph() + item.displayMessageDateTime,
         hasAttachments = item.hasAttachments,
         starred = item.isStarred,
         encrypted = item.isMessageEncrypted,
@@ -140,6 +148,19 @@ private fun rememberMessageItemUi(
         active = isActive,
     )
 }
+
+private fun MessageListItem.smartInboxGlyph(): String =
+    when (
+        MessageCategoryClassifier.classify(
+            senderEmail = displayAddress?.address,
+            senderDisplayName = displayName,
+            subject = subject,
+        )
+    ) {
+        MessageCategory.Personal -> "P · "
+        MessageCategory.Newsletter -> "N · "
+        MessageCategory.Notification -> "A · "
+    }
 
 private fun MessageListItem.buildSenderStyles(): ImmutableList<ComposedAddressStyle> = buildList {
     when (val separatorIndex = displayName.indexOf(',')) {

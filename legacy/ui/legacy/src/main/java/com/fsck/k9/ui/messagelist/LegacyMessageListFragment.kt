@@ -18,6 +18,8 @@ import androidx.annotation.StringRes
 import androidx.appcompat.view.ActionMode
 import androidx.appcompat.widget.SearchView
 import androidx.compose.animation.animateContentSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
@@ -72,6 +74,8 @@ import com.fsck.k9.ui.messagelist.MessageListFragmentBridgeContract.MessageListF
 import com.fsck.k9.ui.messagelist.MessageListFragmentBridgeContract.MessageListFragmentListener.Companion.MAX_PROGRESS
 import com.fsck.k9.ui.messagelist.debug.AuthDebugActions
 import com.fsck.k9.ui.messagelist.item.MessageViewHolder
+import com.fsck.k9.ui.messagelist.smartinbox.SmartInboxChipRow
+import com.fsck.k9.ui.messagelist.smartinbox.SmartInboxChipState
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback
 import com.google.android.material.snackbar.Snackbar
@@ -108,6 +112,8 @@ import net.thunderbird.core.ui.theme.api.FeatureThemeProvider
 import net.thunderbird.feature.account.avatar.AvatarMonogramCreator
 import net.thunderbird.feature.mail.folder.api.OutboxFolderManager
 import net.thunderbird.feature.mail.message.list.domain.DomainContract
+import net.thunderbird.feature.mail.message.list.smartinbox.MessageCategory
+import net.thunderbird.feature.mail.message.list.smartinbox.MessageCategoryClassifier
 import net.thunderbird.feature.mail.message.list.ui.dialog.SetupArchiveFolderDialogFragmentFactory
 import net.thunderbird.feature.notification.api.content.InAppNotification
 import net.thunderbird.feature.notification.api.content.SentFolderNotFoundNotification
@@ -207,6 +213,31 @@ class LegacyMessageListFragment :
     private var floatingActionButton: FloatingActionButton? = null
 
     private lateinit var adapter: MessageListAdapter
+
+    // Smart Inbox prototype — see SmartInboxChipRow.kt for the throwaway-integration note.
+    // allViewItems holds the unfiltered list; adapter.viewItems reflects the category-filtered
+    // projection. Reading from adapter.viewItems from outside mutator sites is unsafe because
+    // those callers would see only the currently-visible category.
+    private var allViewItems: List<MessageListViewItem> = emptyList()
+        set(value) {
+            field = value
+            if (::adapter.isInitialized) {
+                adapter.viewItems = value.applySmartInboxFilter()
+            }
+            refreshSmartInboxChipState()
+        }
+
+    private var selectedSmartInboxCategory: MessageCategory? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            if (::adapter.isInitialized) {
+                adapter.viewItems = allViewItems.applySmartInboxFilter()
+            }
+            refreshSmartInboxChipState()
+        }
+
+    private val smartInboxChipState = mutableStateOf(SmartInboxChipState())
 
     private var searchView: SearchView? = null
     private var initialSearchViewQuery: String? = null
@@ -602,8 +633,51 @@ class LegacyMessageListFragment :
             }
         }
 
+        view.findViewById<ComposeView>(R.id.smart_inbox_chip_row).apply {
+            setContent {
+                featureThemeProvider.WithTheme {
+                    val state by smartInboxChipState
+                    SmartInboxChipRow(
+                        state = state,
+                        onCategorySelected = { selectedSmartInboxCategory = it },
+                    )
+                }
+            }
+        }
+
         this.recyclerView = recyclerView
         this.itemTouchHelper = itemTouchHelper
+    }
+
+    private fun List<MessageListViewItem>.applySmartInboxFilter(): List<MessageListViewItem> {
+        val category = selectedSmartInboxCategory ?: return this
+        return filter {
+            when (it) {
+                is MessageListViewItem.Message -> it.item.smartInboxCategory() == category
+                else -> true
+            }
+        }
+    }
+
+    private fun MessageListItem.smartInboxCategory(): MessageCategory =
+        MessageCategoryClassifier.classify(
+            senderEmail = displayAddress?.address,
+            senderDisplayName = displayName,
+            subject = subject,
+        )
+
+    private fun refreshSmartInboxChipState() {
+        val unreadCounts = allViewItems
+            .asSequence()
+            .filterIsInstance<MessageListViewItem.Message>()
+            .map { it.item }
+            .filterNot { it.isRead }
+            .groupingBy { it.smartInboxCategory() }
+            .eachCount()
+        smartInboxChipState.value = SmartInboxChipState(
+            selected = selectedSmartInboxCategory,
+            unreadCounts = unreadCounts,
+        )
     }
 
     private fun requireCoordinatorLayout(): CoordinatorLayout {
@@ -1388,8 +1462,7 @@ class LegacyMessageListFragment :
     }
 
     override fun updateFooterText(text: String?) {
-        val currentItems = adapter
-            .viewItems
+        val currentItems = allViewItems
             .filter { it !is MessageListViewItem.Footer }
             .toMutableList()
 
@@ -1397,7 +1470,7 @@ class LegacyMessageListFragment :
             currentItems.add(MessageListViewItem.Footer(text))
         }
 
-        adapter.viewItems = currentItems
+        allViewItems = currentItems
     }
 
     private fun selectAll() {
@@ -2004,7 +2077,7 @@ class LegacyMessageListFragment :
             }
         }
 
-        adapter.viewItems = buildList {
+        allViewItems = buildList {
             if (featureFlagProvider.provide(FeatureFlagKey.DisplayInAppNotifications).isEnabled()) {
                 add(MessageListViewItem.InAppNotificationBannerList)
             }
