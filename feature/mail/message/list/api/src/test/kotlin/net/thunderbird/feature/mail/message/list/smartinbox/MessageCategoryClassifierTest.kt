@@ -672,6 +672,54 @@ class MessageCategoryClassifierTest {
         assertThat(result).isEqualTo(MessageCategory.Personal)
     }
 
+    @Test
+    fun `classify noreply suffix after hyphen as Notification`() {
+        // Regression: businessprofile-noreply@google.com was previously missed because the rule
+        // only matched patterns at the start of the local-part.
+        val result = testSubject.classify(
+            senderEmail = "businessprofile-noreply@google.com",
+            senderDisplayName = "Google",
+            subject = null,
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify noreply suffix with multiple hyphen segments as Notification`() {
+        // Regression: drive-shares-dm-noreply@google.com — another real-world example.
+        val result = testSubject.classify(
+            senderEmail = "drive-shares-dm-noreply@google.com",
+            senderDisplayName = "Google Drive",
+            subject = null,
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify noreply suffix after dot as Notification`() {
+        val result = testSubject.classify(
+            senderEmail = "support.noreply@example.com",
+            senderDisplayName = "Example",
+            subject = null,
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify noreply suffix without separator does not match as Personal`() {
+        // "somenoreply" has no separator before `noreply` — shouldn't fire the suffix rule.
+        val result = testSubject.classify(
+            senderEmail = "somenoreply@example.com",
+            senderDisplayName = "A Person",
+            subject = null,
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Personal)
+    }
+
     // --- Precedence interactions ---
 
     @Test

@@ -180,6 +180,11 @@ object MessageCategoryClassifier {
                     this.length > pattern.length &&
                         this.startsWith(pattern) &&
                         this[pattern.length] in LOCAL_PART_SEPARATORS
+                    ) ||
+                (
+                    this.length > pattern.length &&
+                        this.endsWith(pattern) &&
+                        this[this.length - pattern.length - 1] in LOCAL_PART_SEPARATORS
                     )
         }
 
