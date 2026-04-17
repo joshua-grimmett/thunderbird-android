@@ -65,6 +65,10 @@ class MessageListItemMapper(
             contactColor = displayAddress?.let { displayAddress ->
                 contactLetterBitmapCreator?.calcUnknownContactColor(displayAddress)
             } ?: -1,
+            listUnsubscribe = message.listUnsubscribe,
+            listId = message.listId,
+            precedence = message.precedence,
+            autoSubmitted = message.autoSubmitted,
         )
     }
 

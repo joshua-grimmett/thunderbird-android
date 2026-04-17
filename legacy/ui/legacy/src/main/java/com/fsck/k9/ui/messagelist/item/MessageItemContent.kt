@@ -155,6 +155,10 @@ private fun MessageListItem.smartInboxGlyph(): String =
             senderEmail = displayAddress?.address,
             senderDisplayName = displayName,
             subject = subject,
+            listUnsubscribe = listUnsubscribe,
+            listId = listId,
+            precedence = precedence,
+            autoSubmitted = autoSubmitted,
         )
     ) {
         MessageCategory.Personal -> "P · "

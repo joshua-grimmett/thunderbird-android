@@ -28,6 +28,10 @@ data class MessageListItem(
     val threadRoot: Long,
     @get:ColorInt
     val contactColor: Int,
+    val listUnsubscribe: String?,
+    val listId: String?,
+    val precedence: String?,
+    val autoSubmitted: String?,
 ) {
     val messageReference: MessageReference
         get() = MessageReference(account.uuid, folderId, messageUid)

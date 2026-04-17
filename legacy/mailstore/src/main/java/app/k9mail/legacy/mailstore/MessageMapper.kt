@@ -25,4 +25,8 @@ interface MessageDetailsAccessor {
     val hasAttachments: Boolean
     val threadRoot: Long
     val threadCount: Int
+    val listUnsubscribe: String?
+    val listId: String?
+    val precedence: String?
+    val autoSubmitted: String?
 }

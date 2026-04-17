@@ -414,6 +414,11 @@ internal class SaveMessageOperations(
             put("mime_type", message.mimeType)
             put("encryption_type", messageData.encryptionType)
 
+            put("list_unsubscribe", message.getHeader("List-Unsubscribe").firstOrNull()?.trim())
+            put("list_id", message.getHeader("List-ID").firstOrNull()?.trim())
+            put("precedence", message.getHeader("Precedence").firstOrNull()?.trim())
+            put("auto_submitted", message.getHeader("Auto-Submitted").firstOrNull()?.trim())
+
             val previewResult = messageData.previewResult
             put("preview_type", previewResult.previewType.toDatabaseValue())
             if (previewResult.isPreviewTextAvailable) {

@@ -95,6 +95,10 @@ private val fakeMessageListItem = MessageListItem(
     databaseId = 1L,
     threadRoot = 1L,
     contactColor = Color.Magenta.toArgb(),
+    listUnsubscribe = null,
+    listId = null,
+    precedence = null,
+    autoSubmitted = null,
 )
 
 private val fakeMessageListAppearance = MessageListAppearance(

@@ -1,14 +1,20 @@
 package net.thunderbird.feature.mail.message.list.smartinbox
 
 /**
- * Classifies a message into [MessageCategory] using sender-pattern and subject-pattern
- * heuristics only. Pure Kotlin — no Android dependencies.
+ * Classifies a message into [MessageCategory] using RFC-defined header signals plus
+ * sender-pattern and subject-pattern heuristics. Pure Kotlin — no Android dependencies.
  *
- * RFC-defined header signals (`List-ID`, `List-Unsubscribe`, `Precedence`,
- * `Auto-Submitted`) are stronger but require raw headers at classify time, which are
- * not available in the current mailstore projection. Deferred to v0.2 — once plumbed,
- * header rules take precedence over both subject keywords and sender heuristics, and
- * the subject-keyword rules (noisy by construction) should be retired.
+ * Header rules (v0.2) take precedence over sender/subject heuristics when the relevant
+ * headers are present, since they're direct declarations by the sending system:
+ *   - `Auto-Submitted` (non-"no") = transactional / automated mail
+ *   - `List-ID` present = definitive mailing-list membership
+ *   - `Precedence: bulk` / `list` = mailing-list traffic
+ *   - `List-Unsubscribe` present = mailing-list / bulk mail (weaker than List-ID because
+ *     some transactional mail also carries List-Unsubscribe)
+ *
+ * The subject-keyword rules (`sale`, `deals`, `receipt`, etc.) remain as fallback for
+ * pre-v0.2 rows where headers were not indexed. Plan is to retire them once header
+ * coverage is validated on real mail.
  */
 object MessageCategoryClassifier {
 
@@ -103,28 +109,57 @@ object MessageCategoryClassifier {
         NOTIFICATION_SUBJECT_KEYWORDS.map { it.toKeywordRegex() }
 
     /**
-     * Classify a message by sender and subject. First match wins.
+     * Classify a message by headers, sender, and subject. First match wins.
      *
-     *   1. Sender domain is a known newsletter platform            -> Newsletter
-     *   2. Leftmost domain label is a marketing subdomain          -> Newsletter
+     *   1. `Auto-Submitted` header present and not "no"             -> Notification
+     *   2. `List-ID` header present                                 -> Newsletter
+     *   3. `Precedence` header is "bulk" or "list"                  -> Newsletter
+     *   4. `List-Unsubscribe` header present                        -> Newsletter
+     *   5. Sender domain is a known newsletter platform             -> Newsletter
+     *   6. Leftmost domain label is a marketing subdomain           -> Newsletter
      *      (mail, email, mailer, marketing, news, updates, newsletter, promo)
-     *   3. Subject contains a newsletter keyword                   -> Newsletter
-     *   4. Display name contains a newsletter keyword              -> Newsletter
-     *   5. Leftmost domain label is a transactional subdomain      -> Notification
+     *   7. Subject contains a newsletter keyword                    -> Newsletter
+     *   8. Display name contains a newsletter keyword               -> Newsletter
+     *   9. Leftmost domain label is a transactional subdomain       -> Notification
      *      (notify, notifications, alerts, receipts, billing, security, account)
-     *   6. Subject contains a transactional keyword                -> Notification
-     *   7. Sender local-part is an automated-sender token          -> Notification
-     *   8. Otherwise                                                -> Personal
+     *  10. Subject contains a transactional keyword                 -> Notification
+     *  11. Sender local-part is an automated-sender token           -> Notification
+     *      (prefix or suffix match on noreply, no-reply, donotreply,
+     *      do-not-reply, notifications, notification, alerts, alert)
+     *  12. Otherwise                                                 -> Personal
      *
-     * Newsletter wins in any Newsletter/Notification overlap — e.g.
-     * `notifications@mail.postman.com` resolves to Newsletter via rule 2 rather than
-     * Notification via rule 7.
+     * Header rules 1-4 fire first so that declarations from the sending system beat
+     * heuristic guesses. Within the header rules, Auto-Submitted wins over the
+     * list-type headers because some transactional mail (e.g. password resets) also
+     * carries `List-Unsubscribe` to offer opt-out of notification settings.
+     *
+     * Newsletter wins in any Newsletter/Notification overlap among heuristic rules —
+     * e.g. `notifications@mail.postman.com` resolves to Newsletter via rule 6 rather
+     * than Notification via rule 11.
      */
+    @Suppress("LongParameterList", "ReturnCount")
     fun classify(
         senderEmail: String?,
         senderDisplayName: CharSequence?,
         subject: CharSequence?,
+        listUnsubscribe: String? = null,
+        listId: String? = null,
+        precedence: String? = null,
+        autoSubmitted: String? = null,
     ): MessageCategory {
+        autoSubmitted?.trim()?.takeIf { it.isNotEmpty() }?.let { value ->
+            val token = value.substringBefore(';').trim().lowercase()
+            if (token.isNotEmpty() && token != "no") return MessageCategory.Notification
+        }
+
+        if (!listId.isNullOrBlank()) return MessageCategory.Newsletter
+
+        precedence?.trim()?.lowercase()?.let { value ->
+            if (value == "bulk" || value == "list") return MessageCategory.Newsletter
+        }
+
+        if (!listUnsubscribe.isNullOrBlank()) return MessageCategory.Newsletter
+
         val normalizedEmail = senderEmail?.trim()?.lowercase().orEmpty()
         val atIndex = normalizedEmail.indexOf('@')
         val hasValidSplit = atIndex in 1..normalizedEmail.length - 2

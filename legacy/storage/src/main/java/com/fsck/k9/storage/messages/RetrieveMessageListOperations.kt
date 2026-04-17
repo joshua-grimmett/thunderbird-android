@@ -20,23 +20,27 @@ internal class RetrieveMessageListOperations(private val lockableDatabase: Locka
         return lockableDatabase.execute(false) { database ->
             database.rawQuery(
                 """
-SELECT 
-  messages.id AS id, 
-  uid, 
-  folder_id, 
-  sender_list, 
-  to_list, 
-  cc_list, 
-  date, 
-  internal_date, 
-  subject, 
+SELECT
+  messages.id AS id,
+  uid,
+  folder_id,
+  sender_list,
+  to_list,
+  cc_list,
+  date,
+  internal_date,
+  subject,
   preview_type,
-  preview, 
-  read, 
-  flagged, 
-  answered, 
-  forwarded, 
-  attachment_count, 
+  preview,
+  read,
+  flagged,
+  answered,
+  forwarded,
+  attachment_count,
+  list_unsubscribe,
+  list_id,
+  precedence,
+  auto_submitted,
   root
 FROM messages
 JOIN threads ON (threads.message_id = messages.id)
@@ -76,24 +80,28 @@ ORDER BY $sortOrder
         return lockableDatabase.execute(false) { database ->
             database.rawQuery(
                 """
-SELECT 
-  messages.id AS id, 
-  uid, 
-  folder_id, 
-  sender_list, 
-  to_list, 
-  cc_list, 
-  aggregated.date AS date, 
-  aggregated.internal_date AS internal_date, 
-  subject, 
+SELECT
+  messages.id AS id,
+  uid,
+  folder_id,
+  sender_list,
+  to_list,
+  cc_list,
+  aggregated.date AS date,
+  aggregated.internal_date AS internal_date,
+  subject,
   preview_type,
-  preview, 
-  aggregated.read AS read, 
-  aggregated.flagged AS flagged, 
-  aggregated.answered AS answered, 
-  aggregated.forwarded AS forwarded, 
-  aggregated.attachment_count AS attachment_count, 
-  root, 
+  preview,
+  aggregated.read AS read,
+  aggregated.flagged AS flagged,
+  aggregated.answered AS answered,
+  aggregated.forwarded AS forwarded,
+  aggregated.attachment_count AS attachment_count,
+  list_unsubscribe,
+  list_id,
+  precedence,
+  auto_submitted,
+  root,
   aggregated.thread_count AS thread_count
 FROM (
   SELECT 
@@ -149,25 +157,29 @@ ORDER BY $orderBy
         return lockableDatabase.execute(false) { database ->
             database.rawQuery(
                 """
-SELECT 
-  messages.id AS id, 
-  uid, 
-  folder_id, 
-  sender_list, 
-  to_list, 
-  cc_list, 
-  date, 
-  internal_date, 
-  subject, 
+SELECT
+  messages.id AS id,
+  uid,
+  folder_id,
+  sender_list,
+  to_list,
+  cc_list,
+  date,
+  internal_date,
+  subject,
   preview_type,
-  preview, 
-  read, 
-  flagged, 
-  answered, 
-  forwarded, 
-  attachment_count, 
+  preview,
+  read,
+  flagged,
+  answered,
+  forwarded,
+  attachment_count,
+  list_unsubscribe,
+  list_id,
+  precedence,
+  auto_submitted,
   root
-FROM threads 
+FROM threads
 JOIN messages ON (messages.id = threads.message_id)
 LEFT JOIN FOLDERS ON (folders.id = messages.folder_id)
 WHERE
@@ -229,10 +241,18 @@ private class CursorMessageAccessor(val cursor: Cursor, val includesThreadCount:
         get() = cursor.getInt(14) == 1
     override val hasAttachments: Boolean
         get() = cursor.getInt(15) > 0
+    override val listUnsubscribe: String?
+        get() = cursor.getString(16)
+    override val listId: String?
+        get() = cursor.getString(17)
+    override val precedence: String?
+        get() = cursor.getString(18)
+    override val autoSubmitted: String?
+        get() = cursor.getString(19)
     override val threadRoot: Long
-        get() = cursor.getLong(16)
+        get() = cursor.getLong(20)
     override val threadCount: Int
-        get() = if (includesThreadCount) cursor.getInt(17) else 0
+        get() = if (includesThreadCount) cursor.getInt(21) else 0
 }
 
 private val AGGREGATED_MESSAGES_COLUMNS = arrayOf(

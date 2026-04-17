@@ -883,4 +883,157 @@ class MessageCategoryClassifierTest {
 
         assertThat(result).isEqualTo(MessageCategory.Personal)
     }
+
+    // --- Header rules ---
+
+    @Test
+    fun `classify auto-submitted auto-generated as Notification`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = "Please verify",
+            autoSubmitted = "auto-generated",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify auto-submitted auto-replied as Notification`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = null,
+            autoSubmitted = "auto-replied",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify auto-submitted no is ignored and falls through to Personal`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = null,
+            autoSubmitted = "no",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Personal)
+    }
+
+    @Test
+    fun `classify auto-submitted with trailing parameters is still recognized`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = null,
+            autoSubmitted = "auto-generated; owner=system",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify list-id present as Newsletter`() {
+        val result = testSubject.classify(
+            senderEmail = "updates@example.com",
+            senderDisplayName = "Example",
+            subject = "Spring update",
+            listId = "<users.example.com>",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Newsletter)
+    }
+
+    @Test
+    fun `classify precedence bulk as Newsletter`() {
+        val result = testSubject.classify(
+            senderEmail = "alerts@example.com",
+            senderDisplayName = "Example",
+            subject = null,
+            precedence = "bulk",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Newsletter)
+    }
+
+    @Test
+    fun `classify precedence list as Newsletter`() {
+        val result = testSubject.classify(
+            senderEmail = "alerts@example.com",
+            senderDisplayName = "Example",
+            subject = null,
+            precedence = "list",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Newsletter)
+    }
+
+    @Test
+    fun `classify precedence junk is not treated as Newsletter`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = null,
+            precedence = "junk",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Personal)
+    }
+
+    @Test
+    fun `classify list-unsubscribe present as Newsletter`() {
+        val result = testSubject.classify(
+            senderEmail = "team@runpod.io",
+            senderDisplayName = "Runpod Team",
+            subject = "Serverless worker fitness checks are live",
+            listUnsubscribe = "<https://hs-24119306.s.hubspotemail.net/hs/preferences-center/...>",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Newsletter)
+    }
+
+    @Test
+    fun `classify auto-submitted beats list-unsubscribe so transactional mail is not miscategorised`() {
+        // Regression: password-reset style mail often carries List-Unsubscribe (to opt out of
+        // the notification preference), so Auto-Submitted must be checked first.
+        val result = testSubject.classify(
+            senderEmail = "no-reply@example.com",
+            senderDisplayName = "Example",
+            subject = "Reset your password",
+            listUnsubscribe = "<mailto:unsubscribe@example.com>",
+            autoSubmitted = "auto-generated",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Notification)
+    }
+
+    @Test
+    fun `classify list-id beats Auto-Submitted-no`() {
+        val result = testSubject.classify(
+            senderEmail = "updates@example.com",
+            senderDisplayName = "Example",
+            subject = null,
+            listId = "<users.example.com>",
+            autoSubmitted = "no",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Newsletter)
+    }
+
+    @Test
+    fun `classify blank header values are treated as absent`() {
+        val result = testSubject.classify(
+            senderEmail = "alice@example.com",
+            senderDisplayName = "Alice",
+            subject = null,
+            listUnsubscribe = "  ",
+            listId = "",
+            precedence = "",
+            autoSubmitted = "  ",
+        )
+
+        assertThat(result).isEqualTo(MessageCategory.Personal)
+    }
 }

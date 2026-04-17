@@ -664,6 +664,10 @@ class LegacyMessageListFragment :
             senderEmail = displayAddress?.address,
             senderDisplayName = displayName,
             subject = subject,
+            listUnsubscribe = listUnsubscribe,
+            listId = listId,
+            precedence = precedence,
+            autoSubmitted = autoSubmitted,
         )
 
     private fun refreshSmartInboxChipState() {
